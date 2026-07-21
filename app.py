@@ -518,8 +518,11 @@ def _sql_gastos_connect():
         ("ODBC Driver 17 for SQL Server", f"SERVER={server}", ";TrustServerCertificate=yes;Encrypt=no"),
         ("SQL Server Native Client 11.0", f"SERVER={server}", ""),
         ("SQL Server", f"SERVER={server}", ""),
-        ("FreeTDS", f"SERVER={host};PORT={port}", ";TDS_Version=7.4"),
     ]
+    # FreeTDS (Linux/Streamlit Cloud): probar varias versiones de protocolo
+    # TDS por si el server rechaza la negociación con la 7.4.
+    for tds_ver in ("7.4", "7.3", "7.2", "8.0"):
+        attempts.append(("FreeTDS", f"SERVER={host};PORT={port}", f";TDS_Version={tds_ver}"))
     last = None
     for drv, server_part, extra in attempts:
         for dbo in db_options:
@@ -527,7 +530,7 @@ def _sql_gastos_connect():
                 cs = f"DRIVER={{{drv}}};{server_part};UID={user};PWD={pwd}{extra}"
                 if dbo:
                     cs += f";DATABASE={dbo}"
-                return pyodbc.connect(cs, timeout=10)
+                return pyodbc.connect(cs, timeout=8)
             except Exception as e:
                 last = e
     raise last
