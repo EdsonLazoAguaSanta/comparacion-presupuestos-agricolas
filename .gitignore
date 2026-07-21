@@ -1,0 +1,14 @@
+# Secretos — NUNCA subir esto a git
+.streamlit/secrets.toml
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+env/
+
+# Editor/SO
+.vscode/
+.idea/
+.DS_Store
