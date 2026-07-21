@@ -10,6 +10,7 @@ import requests
 import hashlib, hmac
 import time
 import base64
+import socket
 from io import BytesIO
 from openpyxl import load_workbook
 
@@ -482,10 +483,31 @@ def _split_host_port(server, default_port=1433):
     return s, default_port
 
 
+def _tcp_reachable(host, port, timeout=5):
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except Exception:
+        return False
+
+
 def _sql_gastos_connect():
     server, db, user, pwd = _sql_gastos_cfg()
     host, port = _split_host_port(server)
-    db_options = ["", db, "Presupuesto", "master"]
+
+    # Chequeo rápido de red ANTES de intentar drivers ODBC: si el host:puerto
+    # no es alcanzable (ej. servidor solo accesible por VPN/red interna y
+    # este proceso corre en Streamlit Cloud), fallar en segundos con un
+    # mensaje claro, en vez de colgarse varios minutos probando cada
+    # combinación de driver x timeout de 30s.
+    if not _tcp_reachable(host, port, timeout=6):
+        raise RuntimeError(
+            f"No se pudo alcanzar {host}:{port} en 6 segundos. El SQL Server probablemente "
+            f"solo acepta conexiones desde la red interna/VPN de la empresa, y este proceso "
+            f"corre fuera de esa red (ej. Streamlit Community Cloud). Revisa la conectividad "
+            f"de red antes de seguir — reintentar drivers ODBC no va a arreglar esto.")
+
+    db_options = [db, ""]
     # Los drivers "ODBC Driver X for SQL Server" son los que hay en Windows
     # (dev local). "FreeTDS" es el que queda disponible en contenedores Linux
     # tipo Streamlit Cloud, donde no se puede instalar el driver oficial de
@@ -505,7 +527,7 @@ def _sql_gastos_connect():
                 cs = f"DRIVER={{{drv}}};{server_part};UID={user};PWD={pwd}{extra}"
                 if dbo:
                     cs += f";DATABASE={dbo}"
-                return pyodbc.connect(cs, timeout=30)
+                return pyodbc.connect(cs, timeout=10)
             except Exception as e:
                 last = e
     raise last
